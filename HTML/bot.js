@@ -3,9 +3,24 @@ const path = require("path");
 const dns = require("dns");
 
 const ENV_PATH = path.join(__dirname, ".env");
-const TRACKS_PATH = path.join(__dirname, "data", "tracks.json");
-const TRACKS_EXAMPLE_PATH = path.join(__dirname, "data", "tracks.example.json");
-const MEDIA_DIR = path.join(__dirname, "media");
+const TRACKS_CANDIDATES = [
+  path.join(__dirname, "data", "tracks.json"),
+  path.join(process.cwd(), "data", "tracks.json"),
+  path.join(process.cwd(), "HTML", "data", "tracks.json"),
+  path.join(__dirname, "..", "data", "tracks.json")
+];
+const TRACKS_EXAMPLE_CANDIDATES = [
+  path.join(__dirname, "data", "tracks.example.json"),
+  path.join(process.cwd(), "data", "tracks.example.json"),
+  path.join(process.cwd(), "HTML", "data", "tracks.example.json"),
+  path.join(__dirname, "..", "data", "tracks.example.json")
+];
+const MEDIA_DIR_CANDIDATES = [
+  path.join(__dirname, "media"),
+  path.join(process.cwd(), "media"),
+  path.join(process.cwd(), "HTML", "media"),
+  path.join(__dirname, "..", "media")
+];
 
 loadEnv();
 
@@ -98,6 +113,9 @@ const userLanguage = new Map();
 async function main() {
   console.log("Bot is running...");
   console.log(`Checking subscriptions in: ${REQUIRED_CHANNEL}`);
+  console.log(`Tracks path: ${getTracksPath() || "not found"}`);
+  console.log(`Media dir: ${getMediaDir() || "not found"}`);
+  console.log(`Loaded track keys: ${Object.keys(tracks).join(", ") || "none"}`);
 
   while (true) {
     try {
@@ -245,6 +263,9 @@ async function handleMessage(message) {
   const track = tracks[normalizedNumber];
 
   if (!track) {
+    console.log(
+      `Track not found for number ${normalizedNumber}. Available keys: ${Object.keys(tracks).join(", ")}`
+    );
     await sendMessage(chatId, t(language, "notFound", { number: normalizedNumber }));
     return;
   }
@@ -307,12 +328,14 @@ function loadEnv() {
 }
 
 function loadTracks() {
-  if (fs.existsSync(TRACKS_PATH)) {
-    return JSON.parse(fs.readFileSync(TRACKS_PATH, "utf8"));
+  const tracksPath = getTracksPath();
+  if (tracksPath) {
+    return JSON.parse(fs.readFileSync(tracksPath, "utf8"));
   }
 
-  if (fs.existsSync(TRACKS_EXAMPLE_PATH)) {
-    return JSON.parse(fs.readFileSync(TRACKS_EXAMPLE_PATH, "utf8"));
+  const examplePath = findExistingFile(TRACKS_EXAMPLE_CANDIDATES);
+  if (examplePath) {
+    return JSON.parse(fs.readFileSync(examplePath, "utf8"));
   }
 
   return {};
@@ -392,6 +415,8 @@ function buildBuyKeyboard(language, track) {
 }
 
 function resolveTrackSource(track) {
+  const mediaDir = getMediaDir();
+
   if (typeof track.url === "string" && track.url.trim()) {
     return {
       type: "url",
@@ -399,11 +424,39 @@ function resolveTrackSource(track) {
     };
   }
 
-  if (typeof track.file === "string" && track.file.trim()) {
+  if (mediaDir && typeof track.file === "string" && track.file.trim()) {
     return {
       type: "file",
-      value: path.join(MEDIA_DIR, track.file.trim())
+      value: path.join(mediaDir, track.file.trim())
     };
+  }
+
+  return null;
+}
+
+function getTracksPath() {
+  return findExistingFile(TRACKS_CANDIDATES);
+}
+
+function getMediaDir() {
+  return findExistingDirectory(MEDIA_DIR_CANDIDATES);
+}
+
+function findExistingFile(candidates) {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function findExistingDirectory(candidates) {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
   }
 
   return null;
