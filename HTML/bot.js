@@ -44,7 +44,7 @@ const translations = {
     chooseLanguageFirst: "Сначала выберите язык.",
     languageChanged: "Язык переключен на русский.",
     startText:
-      "Этот бот отправляет бит только после подписки на канал.\n\n1. Подпишитесь на канал.\n2. Нажмите \"Проверить подписку\".\n3. Отправьте нужный номер.",
+      "Этот бот отправляет файл только после подписки на канал.\n\n1. Подпишитесь на канал.\n2. Нажмите \"Проверить подписку\".\n3. Отправьте нужный номер.",
     nonTextMessage: "Отправьте текстовый номер.",
     subscriptionPending: "Подписка пока не подтверждена.",
     subscriptionConfirmed: "Подписка подтверждена.",
@@ -76,7 +76,7 @@ const translations = {
     chooseLanguageFirst: "Please choose a language first.",
     languageChanged: "Language switched to English.",
     startText:
-      "This bot sends an mp3 only after channel subscription.\n\n1. Subscribe to the channel.\n2. Tap \"Check subscription\".\n3. Send the required number.",
+      "This bot sends an file only after channel subscription.\n\n1. Subscribe to the channel.\n2. Tap \"Check subscription\".\n3. Send the required number.",
     nonTextMessage: "Send a text number.",
     subscriptionPending: "Subscription is not confirmed yet.",
     subscriptionConfirmed: "Subscription confirmed.",
