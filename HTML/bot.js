@@ -23,12 +23,13 @@ const MEDIA_DIR_CANDIDATES = [
 ];
 
 loadEnv();
-
 dns.setDefaultResultOrder("ipv4first");
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const REQUIRED_CHANNEL = (process.env.REQUIRED_CHANNEL || "").trim();
 const CHANNEL_URL = process.env.CHANNEL_URL || buildChannelUrl(REQUIRED_CHANNEL);
+const REQUIRED_CHANNEL_999 = (process.env.REQUIRED_CHANNEL_999 || "").trim();
+const CHANNEL_URL_999 = process.env.CHANNEL_URL_999 || buildChannelUrl(REQUIRED_CHANNEL_999);
 const TELEGRAM_API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 if (!BOT_TOKEN || !REQUIRED_CHANNEL || !CHANNEL_URL) {
@@ -51,16 +52,25 @@ const translations = {
     sendNumberPrompt: "Теперь отправьте номер, для которого нужно получить файл.",
     subscriptionConfirmedShort: "Подписка подтверждена. Теперь отправьте номер.",
     digitsOnly: "Номер должен содержать только цифры.",
-    notFound: "Для номера {number} бит не найден.",
+    notFound: "Для номера {number} файл не найден.",
     fileMissing: "Файл для номера {number} не найден на диске: {file}",
     defaultCaption: "Файл для номера {number}",
     buyButton: "Купить",
     subscribeButton: "Подписаться на канал",
     checkButton: "Проверить подписку",
+    subscribeSecondChannelButton: "Подписаться на 2-й канал",
+    checkSecondChannelButton: "Проверить 2-й канал",
+    secondChannelRequiredFor999:
+      "Для номера 999 нужно подписаться еще на 2-й Telegram-канал.",
+    secondChannelPendingFor999: "Подписка на 2-й канал для номера 999 пока не подтверждена.",
+    secondChannelConfirmedFor999:
+      "Подписка на 2-й канал подтверждена. Теперь снова отправьте 999.",
+    secondChannelConfigMissing:
+      "Для номера 999 не настроены REQUIRED_CHANNEL_999 или CHANNEL_URL_999.",
     publicChannelNotFound:
       "Я не могу найти канал для проверки подписки.\n\nПроверьте значение REQUIRED_CHANNEL в .env. Для публичного канала это обычно @username, а для приватного канала часто нужен ID вида -100...",
     cantCheckSubscription:
-      "Я не могу проверить подписку автоматически.\n\nСкорее всего, бота нужно добавить в канал и выдать ему права администратора. После этого нажмите \"Проверить подписку\" ещё раз.",
+      "Я не могу проверить подписку автоматически.\n\nСкорее всего, бота нужно добавить в канал и выдать ему права администратора. После этого нажмите \"Проверить подписку\" еще раз.",
     genericSubscriptionError:
       "Я не смог проверить подписку из-за настроек канала или бота.\n\nТехническая причина: {error}",
     subscriptionNotFound:
@@ -76,19 +86,29 @@ const translations = {
     chooseLanguageFirst: "Please choose a language first.",
     languageChanged: "Language switched to English.",
     startText:
-      "This bot sends an file only after channel subscription.\n\n1. Subscribe to the channel.\n2. Tap \"Check subscription\".\n3. Send the required number.",
+      "This bot sends a file only after channel subscription.\n\n1. Subscribe to the channel.\n2. Tap \"Check subscription\".\n3. Send the required number.",
     nonTextMessage: "Send a text number.",
     subscriptionPending: "Subscription is not confirmed yet.",
     subscriptionConfirmed: "Subscription confirmed.",
-    sendNumberPrompt: "Now send the number for which you want to receive an file.",
+    sendNumberPrompt: "Now send the number for which you want to receive a file.",
     subscriptionConfirmedShort: "Subscription confirmed. Now send the number.",
     digitsOnly: "The number must contain digits only.",
-    notFound: "No mp3 was found for number {number}.",
+    notFound: "No file was found for number {number}.",
     fileMissing: "The file for number {number} was not found on disk: {file}",
     defaultCaption: "File for number {number}",
     buyButton: "Buy",
     subscribeButton: "Subscribe to channel",
     checkButton: "Check subscription",
+    subscribeSecondChannelButton: "Subscribe to 2nd channel",
+    checkSecondChannelButton: "Check 2nd channel",
+    secondChannelRequiredFor999:
+      "For number 999 you also need to subscribe to the second Telegram channel.",
+    secondChannelPendingFor999:
+      "The second channel subscription for number 999 is not confirmed yet.",
+    secondChannelConfirmedFor999:
+      "The second channel subscription is confirmed. Now send 999 again.",
+    secondChannelConfigMissing:
+      "REQUIRED_CHANNEL_999 or CHANNEL_URL_999 is not configured for number 999.",
     publicChannelNotFound:
       "I cannot find the channel for subscription check.\n\nCheck REQUIRED_CHANNEL in .env. For a public channel this is usually @username, and for a private channel it is often an ID like -100...",
     cantCheckSubscription:
@@ -171,6 +191,30 @@ async function handleCallbackQuery(callbackQuery) {
   if (!language) {
     await answerCallbackQuery(id, translations.ru.chooseLanguageFirst);
     await sendMessage(from.id, translations.ru.chooseLanguage, languageKeyboard());
+    return;
+  }
+
+  if (data === "check_subscription_999") {
+    if (!REQUIRED_CHANNEL_999 || !CHANNEL_URL_999) {
+      await answerCallbackQuery(id, t(language, "secondChannelConfigMissing"));
+      await sendMessage(from.id, t(language, "secondChannelConfigMissing"));
+      return;
+    }
+
+    const secondSubscriptionState = await getSingleChannelSubscriptionState(from.id, REQUIRED_CHANNEL_999);
+
+    if (!secondSubscriptionState.subscribed) {
+      await answerCallbackQuery(id, t(language, "secondChannelPendingFor999"));
+      await sendMessage(
+        from.id,
+        t(language, "secondChannelRequiredFor999"),
+        special999Keyboard(language)
+      );
+      return;
+    }
+
+    await answerCallbackQuery(id, t(language, "subscriptionConfirmed"));
+    await sendMessage(from.id, t(language, "secondChannelConfirmedFor999"));
     return;
   }
 
@@ -272,6 +316,35 @@ async function handleMessage(message) {
 
   const caption = track.caption || t(language, "defaultCaption", { number: normalizedNumber });
   const replyMarkup = buildBuyKeyboard(language, track);
+
+  if (normalizedNumber === "999") {
+    if (!REQUIRED_CHANNEL_999 || !CHANNEL_URL_999) {
+      await sendMessage(chatId, t(language, "secondChannelConfigMissing"));
+      return;
+    }
+
+    const secondSubscriptionState = await getSingleChannelSubscriptionState(chatId, REQUIRED_CHANNEL_999);
+
+    if (!secondSubscriptionState.subscribed) {
+      await sendMessage(
+        chatId,
+        t(language, "secondChannelRequiredFor999"),
+        special999Keyboard(language)
+      );
+      return;
+    }
+  }
+
+  if (track.type === "link") {
+    if (track.photoUrl) {
+      await sendPhotoFromUrl(chatId, track.photoUrl, caption, replyMarkup);
+      return;
+    }
+
+    await sendMessage(chatId, caption, replyMarkup);
+    return;
+  }
+
   const trackSource = resolveTrackSource(track);
 
   if (!trackSource) {
@@ -397,6 +470,25 @@ function subscriptionKeyboard(language) {
   };
 }
 
+function special999Keyboard(language) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: t(language, "subscribeSecondChannelButton"),
+          url: CHANNEL_URL_999
+        }
+      ],
+      [
+        {
+          text: t(language, "checkSecondChannelButton"),
+          callback_data: "check_subscription_999"
+        }
+      ]
+    ]
+  };
+}
+
 function buildBuyKeyboard(language, track) {
   if (!track.buyUrl) {
     return null;
@@ -483,9 +575,13 @@ function buildChannelUrl(channelValue) {
 }
 
 async function getSubscriptionState(userId) {
+  return getSingleChannelSubscriptionState(userId, REQUIRED_CHANNEL);
+}
+
+async function getSingleChannelSubscriptionState(userId, channelId) {
   try {
     const member = await api("getChatMember", {
-      chat_id: REQUIRED_CHANNEL,
+      chat_id: channelId,
       user_id: userId
     });
 
@@ -562,7 +658,7 @@ async function sendAudio(chatId, audioPath, caption, replyMarkup) {
   const blob = new Blob([fileBuffer]);
   form.append("audio", blob, fileName);
 
-  const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
+  const response = await fetch(`${TELEGRAM_API_BASE}/sendAudio`, {
     method: "POST",
     body: form
   }).catch((error) => {
@@ -588,6 +684,20 @@ async function sendAudioFromUrl(chatId, audioUrl, caption, replyMarkup) {
   }
 
   await api("sendAudio", payload);
+}
+
+async function sendPhotoFromUrl(chatId, photoUrl, caption, replyMarkup) {
+  const payload = {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption
+  };
+
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
+
+  await api("sendPhoto", payload);
 }
 
 async function api(method, payload) {
